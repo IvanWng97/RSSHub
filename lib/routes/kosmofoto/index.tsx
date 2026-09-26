@@ -15,7 +15,7 @@ const baseUrl = 'https://kosmofoto.com';
 const api = (path: string, query: Record<string, string | number>) => ofetch(`${baseUrl}/wp-json/wp/v2/${path}`, { query });
 
 // Images are served through Jetpack Photon with a resize query (696px wide); without the query the original is served
-const cleanContent = (html: string): string => {
+const cleanContent = (html: string) => {
     const $ = load(html, null, false);
     $('img').each((_, el) => {
         const $img = $(el);
@@ -27,7 +27,7 @@ const cleanContent = (html: string): string => {
         // srcset, sizes and the dimensions all describe the resized variant the rewrite just replaced
         $img.removeAttr('srcset').removeAttr('sizes').removeAttr('width').removeAttr('height');
     });
-    return $.html();
+    return $;
 };
 
 export const route: Route = {
@@ -92,7 +92,9 @@ async function handler(ctx) {
 
     const items: DataItem[] = posts.map((post) => {
         const featured = post._embedded?.['wp:featuredmedia']?.find((media) => media.id === post.featured_media);
-        const image = featured?.source_url;
+        const $ = cleanContent(post.content.rendered);
+        // most posts already show the featured image in the body; only prepend it when the body lacks it
+        const image = $(`img.wp-image-${post.featured_media}`).length ? undefined : featured?.source_url;
 
         return {
             title: post.title.rendered,
@@ -111,7 +113,7 @@ async function handler(ctx) {
                             {featured.caption?.rendered ? <figcaption>{raw(featured.caption.rendered)}</figcaption> : null}
                         </figure>
                     ) : null}
-                    {raw(cleanContent(post.content.rendered))}
+                    {raw($.html())}
                 </>
             ),
         };
